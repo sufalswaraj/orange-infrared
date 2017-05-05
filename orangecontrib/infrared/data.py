@@ -32,6 +32,21 @@ class DptReader(FileFormat):
         return Orange.data.Table(domain, datavals)
 
 
+class Txt2Reader(FileFormat):
+    """ Reader for files with two columns of numbers (X and Y)"""
+    EXTENSIONS = ('.txt2',)
+    DESCRIPTION = 'X-Y pairs'
+
+    def read(self):
+        tbl = np.genfromtxt(self.filename, skip_header=4)
+        #domvals = tbl.T[0]  # first column is attribute name
+        from orangecontrib.infrared.preprocess import features_with_interpolation
+        #domain = Orange.data.Domain(features_with_interpolation(domvals), None)
+        domain = Orange.data.Domain(['x', 'y'])
+        #datavals = tbl.T[1:]
+        return Orange.data.Table(domain, tbl)
+
+
 def _table_from_image(X, features, x_locs, y_locs):
     """
     Create a Orange.data.Table from 3D image organized
@@ -160,9 +175,9 @@ class EnviMapReader(FileFormat):
         return _table_from_image(X, features, x_locs, y_locs)
 
 class HDF5Reader_HERMES(FileFormat):
-    """ A very case specific reader for HDF5 files from the HEREMES beamline in SOLEIL"""
+    """ A very case specific reader for HDF5 files from the HERMES beamline in SOLEIL"""
     EXTENSIONS = ('.hdf5',)
-    DESCRIPTION = 'HDF5 file @HERMRES/SOLEIL'
+    DESCRIPTION = 'HDF5 file @HERMES/SOLEIL'
 
     def read(self):
         try:
