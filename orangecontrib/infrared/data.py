@@ -15,7 +15,9 @@ from scipy.io import matlab
 import numbers
 import h5py
 
-from .pymca5 import OmnicMap
+from orangecontrib.infrared.pymca5 import OmnicMap
+
+#from .pymca5 import OmnicMap
 
 
 class DptReader(FileFormat):
@@ -30,6 +32,21 @@ class DptReader(FileFormat):
         domain = Orange.data.Domain(features_with_interpolation(domvals), None)
         datavals = tbl.T[1:]
         return Orange.data.Table(domain, datavals)
+
+
+class Txt2Reader(FileFormat):
+    """ Reader for files with two columns of numbers (X and Y)"""
+    EXTENSIONS = ('.txt2',)
+    DESCRIPTION = 'X-Y pairs'
+
+    def read(self):
+        tbl = np.genfromtxt(self.filename, skip_header=4)
+        #domvals = tbl.T[0]  # first column is attribute name
+        from orangecontrib.infrared.preprocess import features_with_interpolation
+        #domain = Orange.data.Domain(features_with_interpolation(domvals), None)
+        domain = Orange.data.Domain(['x', 'y'])
+        #datavals = tbl.T[1:]
+        return Orange.data.Table(domain, tbl)
 
 
 def _table_from_image(X, features, x_locs, y_locs):
@@ -159,23 +176,34 @@ class EnviMapReader(FileFormat):
 
         return _table_from_image(X, features, x_locs, y_locs)
 
+
 class HDF5Reader_HERMES(FileFormat):
     """ A very case specific reader for HDF5 files from the HEREMES beamline in SOLEIL"""
     EXTENSIONS = ('.hdf5',)
-    DESCRIPTION = 'HDF5 file @HERMRES/SOLEIL'
+    DESCRIPTION = 'HDF5 file @HERMES/SOLEIL'
 
     def read(self):
-        try:
-            hdf5_file = h5py.File(self.filename)
-            energy = np.array(hdf5_file['entry1/Counter0/energy'])
-            intensities = np.array(hdf5_file['entry1/Counter0/data']).T
+        hdf5_file = h5py.File(self.filename)
+#        scans = ["b'sample point spectrum", "b'sample line spectrum", "b'sample image", "b'sample image stack"]
+#        scan_type = [i for i, elem in enumerate(scans) if str(hdf5_file['entry1/Counter0/stxm_scan_type'][0]) in elem]
+        if str(hdf5_file['entry1/Counter0/stxm_scan_type'][0]) == "b'sample image stack'":
             x_locs = np.array(hdf5_file['entry1/Counter0/sample_x'])
             y_locs = np.array(hdf5_file['entry1/Counter0/sample_y'])
-        except KeyError:
+            energy = np.array(hdf5_file['entry1/Counter0/energy'])
+            intensities = np.array(hdf5_file['entry1/Counter0/data']).T
+        elif str(hdf5_file['entry1/Counter0/stxm_scan_type'][0]) == "b'sample image'":
+            x_locs = np.array(hdf5_file['entry1/Counter0/sample_x'])
+            y_locs = np.array(hdf5_file['entry1/Counter0/sample_y'])
+            energy = np.array(hdf5_file['entry1/Counter0/energy'])
+            intensities_raw = np.array(hdf5_file['entry1/Counter0/data'])
+            intensities = np.reshape(intensities_raw, intensities_raw.shape + (1,))
+        else:
             x_locs = None
             y_locs = None
-
+            energy = None
+            intensities = None
         return _table_from_image(intensities, energy, x_locs, y_locs)
+
 
 class OmnicMapReader(FileFormat):
     """ Reader for files with two columns of numbers (X and Y)"""
