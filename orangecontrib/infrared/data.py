@@ -54,7 +54,8 @@ def _table_from_image(X, features, x_locs, y_locs):
     Create a Orange.data.Table from 3D image organized
     [ rows, columns, wavelengths ]
     """
-    spectra = np.zeros((X.shape[0]*X.shape[1], X.shape[2]), dtype=np.float32)
+    spectra = np.zeros((X.shape[0] * X.shape[1], X.shape[2]), dtype=np.float32)
+
     metadata = []
 
     cs = 0
@@ -86,7 +87,42 @@ def _table_from_image(X, features, x_locs, y_locs):
 
     return data
 
+def _table_from_image_stxm_line(X, features, x_locs, y_locs):
+    """
+    Create a Orange.data.Table from 3D image organized
+    [ rows, columns, wavelengths ]
+    """
+    spectra = np.zeros((X.shape[0]*X.shape[1], X.shape[0]), dtype=np.float32)
+    metadata = []
 
+    cs = 0
+    for ir, row in enumerate(X):
+        for ic, column in enumerate(row):
+            spectra[cs] = column
+            cs += 1
+            if x_locs is not None and y_locs is not None:
+                x = x_locs[ir]
+                y = y_locs[ic]
+                metadata.append({"map_x": x, "map_y": y})
+            else:
+                metadata.append({})
+
+    metakeys = sorted(set(itertools.chain.from_iterable(metadata)))
+    metas = []
+    for mk in metakeys:
+        if mk in ["map_x", "map_y"]:
+            metas.append(Orange.data.ContinuousVariable.make(mk))
+        else:
+            metas.append(Orange.data.StringVariable.make(mk))
+
+    domain = Orange.data.Domain(
+        [Orange.data.ContinuousVariable.make("%f" % f) for f in features],
+        None, metas=metas)
+    metas = np.array([[ row[ma.name] for ma in metas ]
+                            for row in metadata], dtype=object)
+    data = Orange.data.Table(domain, spectra, metas=metas)
+
+    return data
 class MatlabReader(FileFormat):
     EXTENSIONS = ('.mat',)
     DESCRIPTION = "Matlab"
@@ -191,18 +227,28 @@ class HDF5Reader_HERMES(FileFormat):
             y_locs = np.array(hdf5_file['entry1/Counter0/sample_y'])
             energy = np.array(hdf5_file['entry1/Counter0/energy'])
             intensities = np.array(hdf5_file['entry1/Counter0/data']).T
+            data = _table_from_image(intensities, energy, x_locs, y_locs)
         elif str(hdf5_file['entry1/Counter0/stxm_scan_type'][0]) == "b'sample image'":
             x_locs = np.array(hdf5_file['entry1/Counter0/sample_x'])
             y_locs = np.array(hdf5_file['entry1/Counter0/sample_y'])
             energy = np.array(hdf5_file['entry1/Counter0/energy'])
             intensities_raw = np.array(hdf5_file['entry1/Counter0/data'])
             intensities = np.reshape(intensities_raw, intensities_raw.shape + (1,))
+            data = _table_from_image(intensities, energy, x_locs, y_locs)
+        elif str(hdf5_file['entry1/Counter0/stxm_scan_type'][0]) == "b'sample line spectrum'":
+            x_locs = np.array(hdf5_file['entry1/Counter0/energy'])
+            y_locs = np.array(hdf5_file['entry1/Counter0/sample_x'])
+            energy = np.array(hdf5_file['entry1/Counter0/energy']).T
+            intensities_raw = np.array(hdf5_file['entry1/Counter0/data'])
+            intensities = np.reshape(intensities_raw, intensities_raw.shape + (1,))
+            data = _table_from_image_stxm_line(intensities, energy, x_locs, y_locs)
         else:
             x_locs = None
             y_locs = None
             energy = None
             intensities = None
-        return _table_from_image(intensities, energy, x_locs, y_locs)
+            data = _table_from_image(intensities, energy, x_locs, y_locs)
+        return data
 
 
 class OmnicMapReader(FileFormat):
